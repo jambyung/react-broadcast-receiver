@@ -4,37 +4,80 @@ import {
   useContext,
   useMemo,
   useReducer,
-} from "react";
-import { v4 as uuid } from "uuid";
+} from 'react';
+import { uuidv4 } from '../utils/uuid';
 
-const DEBUG = true;
+const DEBUG = false;
 
 export interface Intent {
   action: string;
-  payload?: any;
+  payload?: unknown;
 }
 
+/**
+ * IntentFilter
+ */
 export interface IntentFilter {
+  /**
+   * Action name
+   */
   action: string;
-  f: Function;
+  /**
+   * Trigger Function that will be called.
+   */
+  trigger: IntentFilterFunction;
 }
 
-export interface IntentFilterWithId {
+/**
+ * IntentFilterFunction
+ *
+ * This is function that should be triggered
+ *
+ * @param {ReactBroadcastContextValue} api has all the hook values. Use this to resend / unregister filter / register new filter
+ */
+export type IntentFilterFunction = (
+  payload: unknown,
+  api: ReactBroadcastContextValue,
+) => void;
+
+/**
+ * Function for broadcasting intent
+ *
+ * @param {Intent} intent value
+ */
+export type SendBroadcast = (i: Intent) => void;
+
+/**
+ * Register broadcast receiver
+ *
+ * @param {IntentFilter} intentFilter
+ */
+export type RegisterBroadcastReceiver = (it: IntentFilter) => string;
+
+/**
+ * Remove broadcast receiver
+ *
+ * @param {RemoveBroadcastReceiverActionConfig} config
+ */
+export type RemoveBroadcastReceiver = (
+  config: RemoveBroadcastReceiverActionConfig,
+) => void;
+
+/**
+ * IntentFilter with assigned id
+ */
+export interface IntentFilterWithId extends IntentFilter {
   id: string;
-  action: string;
-  f: Function;
 }
 
 interface ReactBroadcastContextValue {
-  registerBroadcastReceiver: (it: IntentFilter) => string;
-  removeBroadcastReceiver: (
-    config: RemoveBroadcastReceiverActionConfig,
-  ) => void;
-  sendBroadcast: (i: Intent) => void;
+  registerBroadcastReceiver: RegisterBroadcastReceiver;
+  removeBroadcastReceiver: RemoveBroadcastReceiver;
+  sendBroadcast: SendBroadcast;
 }
 
 const notImplemented = () => {
-  throw new Error("Not implemented");
+  throw new Error('Not implemented');
 };
 
 export const ReactBroadcastContext = createContext<ReactBroadcastContextValue>({
@@ -60,24 +103,15 @@ const INITIAL_REDUCER_STATE = {
 };
 
 interface Props {
-  children: JSX.Element;
+  children: React.ReactNode;
 }
 
 export function ReactBroadcastContextProvider({ children }: Props) {
   const [state, dispatch] = useReducer(broadcastReducer, INITIAL_REDUCER_STATE);
 
-  const sendBroadcast = useCallback(function ({ action, payload }: Intent) {
-    const filters = state.intentFilterMap.get(action);
-    if (filters) {
-      for (const filter of filters) {
-        filter.f(payload);
-      }
-    }
-  }, []);
-
   const registerBroadcastReceiver = useCallback(
     function (it: IntentFilter) {
-      const id: string = uuid();
+      const id: string = uuidv4();
 
       dispatch({
         type: IntentActionKind.REGISTER_BROADCAST_RECEIVER,
@@ -93,7 +127,7 @@ export function ReactBroadcastContextProvider({ children }: Props) {
 
       return id;
     },
-    [state.intentFilterMap],
+    [dispatch],
   );
 
   const removeBroadcastReceiver = useCallback(
@@ -103,7 +137,23 @@ export function ReactBroadcastContextProvider({ children }: Props) {
         payload: config,
       });
     },
-    [state.intentFilterMap],
+    [dispatch],
+  );
+
+  const sendBroadcast: SendBroadcast = useCallback(
+    function ({ action, payload }: Intent) {
+      const filters = state.intentFilterMap.get(action);
+      if (filters) {
+        for (const filter of filters) {
+          filter.trigger(payload, {
+            sendBroadcast,
+            registerBroadcastReceiver,
+            removeBroadcastReceiver,
+          });
+        }
+      }
+    },
+    [state.intentFilterMap, registerBroadcastReceiver, removeBroadcastReceiver],
   );
 
   const contextValue = useMemo<ReactBroadcastContextValue>(() => {
@@ -122,9 +172,9 @@ export function ReactBroadcastContextProvider({ children }: Props) {
 }
 
 enum IntentActionKind {
-  SEND_BROADCAST = "SEND_BROADCAST",
-  REGISTER_BROADCAST_RECEIVER = "REGISTER_BROADCAST_RECEIVER",
-  REMOVE_BROADCAST_RECEIVER = "REMOVE_BROADCAST_RECEIVER",
+  SEND_BROADCAST = 'SEND_BROADCAST',
+  REGISTER_BROADCAST_RECEIVER = 'REGISTER_BROADCAST_RECEIVER',
+  REMOVE_BROADCAST_RECEIVER = 'REMOVE_BROADCAST_RECEIVER',
 }
 
 interface SendBroadcastAction {
@@ -160,18 +210,21 @@ export interface BroadcastState {
   intentHistory: Intent[];
 }
 
-function broadcastReducer(state: BroadcastState, action: BroadcastActions) {
+export function broadcastReducer(
+  state: BroadcastState,
+  action: BroadcastActions,
+) {
   const { type, payload } = action;
 
   switch (type) {
     case IntentActionKind.SEND_BROADCAST:
-      if (payload && typeof payload === "object") {
+      if (payload && typeof payload === 'object') {
         return { ...state, intentHistory: [...state.intentHistory, payload] };
       } else {
         return state;
       }
 
-    case IntentActionKind.REGISTER_BROADCAST_RECEIVER:
+    case IntentActionKind.REGISTER_BROADCAST_RECEIVER: {
       const filterList =
         state.intentFilterMap.get(payload.intentFilter.action) || [];
 
@@ -189,9 +242,9 @@ function broadcastReducer(state: BroadcastState, action: BroadcastActions) {
         ...state,
         intentFilterMap: newMap,
       };
+    }
 
-    case IntentActionKind.REMOVE_BROADCAST_RECEIVER:
-      // not implemented yet
+    case IntentActionKind.REMOVE_BROADCAST_RECEIVER: {
       for (const key in state.intentFilterMap) {
         const filters = state.intentFilterMap.get(key) || [];
         for (const filter of filters) {
@@ -211,9 +264,10 @@ function broadcastReducer(state: BroadcastState, action: BroadcastActions) {
       }
 
       return state;
+    }
 
     default:
-      console.log("Not handled, action = ", action);
+      console.log('Not handled, action = ', action);
       return state;
   }
 }

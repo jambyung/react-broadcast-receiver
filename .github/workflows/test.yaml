@@ -1,0 +1,43 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Test Suite
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run test suite
+        run: pnpm test
+
+      - name: Collect coverage
+        run: pnpm coverage
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack
+        run: pnpm pack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: ./package.tgz
