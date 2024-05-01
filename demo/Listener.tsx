@@ -1,43 +1,42 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { ReactBroadcastContext } from '../lib/main';
+import { useCallback, useState } from 'react';
+import {
+  BroadcastReceiver,
+  BroadcastReceiverStatus,
+  useRegisterReceiver,
+} from '@lib/context/ReactBroadcastProvider';
 
 function Listener({ action }: { action: string; num: number }) {
   const [text, setText] = useState('empty');
   const [triggered, setTriggered] = useState(false);
+  const [status, setStatus] = useState<BroadcastReceiverStatus>({
+    id: '',
+    filter: {
+      action: '',
+    },
+  });
 
-  const { registerBroadcastReceiver, removeBroadcastReceiver } = useContext(
-    ReactBroadcastContext,
-  );
-
-  const broadcastReceiver = useCallback(
-    (payload: unknown) => {
+  const receiver: BroadcastReceiver = useCallback(
+    (payload: unknown, api, status) => {
       setText(JSON.stringify(payload));
       setTriggered(true);
-      setTimeout(() => setTriggered(false), 2000);
+      setTimeout(() => {
+        setTriggered(false);
+
+        // tell other receiver to remove this listener's animal
+        api.sendBroadcast({ action: 'remove-animal', payload: action });
+        setStatus(status);
+        // api.unregisterReceiver({ id: status.id });
+      }, 2000);
     },
-    [setText, setTriggered],
+    [setText, setTriggered, action],
   );
 
-  // receiver id
-  const receiverId = useRef<string | null>(null);
-  useEffect(() => {
-    receiverId.current = registerBroadcastReceiver({
+  const { uuid } = useRegisterReceiver(
+    {
       action,
-      trigger: broadcastReceiver,
-    });
-  }, [registerBroadcastReceiver, action, broadcastReceiver]);
-
-  // when broadcastReceiver changes, unregister the old one, and register the
-  // new one since the reference to the function will always be the same if we don't change it
-  useEffect(() => {
-    if (receiverId.current) {
-      removeBroadcastReceiver({ id: receiverId.current });
-    }
-    receiverId.current = registerBroadcastReceiver({
-      action: action,
-      trigger: broadcastReceiver,
-    });
-  }, [broadcastReceiver]);
+    },
+    receiver,
+  );
 
   return (
     <div
@@ -51,7 +50,24 @@ function Listener({ action }: { action: string; num: number }) {
       }}
     >
       <h3 style={{ textWrap: 'nowrap' }}>Action: {action}</h3>
-      <p>Text: {text}</p>
+      <div className='text-box-container'>
+        <div className='text-box'>
+          <label>payload</label>
+          <p>{text}</p>
+        </div>
+        {uuid && (
+          <div className='text-box'>
+            <label>UUID</label>
+            <p>{uuid}</p>
+          </div>
+        )}
+        {status && (
+          <div className='text-box'>
+            <label>Status</label>
+            <p>{JSON.stringify(status)}</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

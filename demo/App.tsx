@@ -1,8 +1,7 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { getRandomActionName } from './utils/actionUtils';
 
-import { ReactBroadcastContext } from '../lib/main';
 import SendMessage from './SendMessage';
 import Listener from './Listener';
 
@@ -14,32 +13,9 @@ import './App.css';
 export const TEST_ACTION = 'test';
 
 function App() {
-  const [count, setCount] = useState(0);
   const [randomActionNames] = useState(
     Array.from({ length: 100 }, () => getRandomActionName()),
   );
-
-  const { registerBroadcastReceiver, removeBroadcastReceiver } = useContext(
-    ReactBroadcastContext,
-  );
-
-  const broadcastReceiver = useCallback(() => {
-    setCount(count + 1);
-  }, [count, setCount]);
-
-  const receiverId = useRef<string | null>(null);
-
-  // when broadcastReceiver changes, unregister the old one, and register the
-  // new one since the reference to the function will always be the same if we don't change it
-  useEffect(() => {
-    if (receiverId.current) {
-      removeBroadcastReceiver({ id: receiverId.current });
-    }
-    receiverId.current = registerBroadcastReceiver({
-      action: TEST_ACTION,
-      trigger: broadcastReceiver,
-    });
-  }, [broadcastReceiver, removeBroadcastReceiver, registerBroadcastReceiver]);
 
   const listeners = randomActionNames.map((name, i) => (
     <div key={i} style={{ padding: '1rem' }}>
