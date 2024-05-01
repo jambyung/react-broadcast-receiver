@@ -28,5 +28,8 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: './test/setup.ts',
     css: true,
+    coverage: {
+      include: ['lib'],
+    },
   },
 });
