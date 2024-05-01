@@ -22,3 +22,12 @@ jobs:
       - run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # TODO:
+      # - name: Pack
+      #   run: pnpm pack --pack-destination packages
+      #
+      # - uses: actions/upload-artifact@v4
+      #   with:
+      #     name: packages
+      #     path: packages/
