@@ -1,10 +1,11 @@
 {
   "name": "react-broadcast-receiver",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "type": "module",
   "scripts": {
     "dev": "vite --config vite-demo.config.ts",
     "test": "vitest",
+    "coverage": "vitest run --coverage",
     "build:lib": "prettier --check && stylelint --allow-empty-input '**/*.{css,scss}' && stylelint tsc --p ./tsconfig-build.json && vite build",
     "build:demo": "tsc --p ./tsconfig.json && vite --config vite-demo.config.ts build",
     "lint": "prettier --check . && stylelint --allow-empty-input '**/*.{css,scss}'",
@@ -40,6 +41,7 @@
     "@typescript-eslint/eslint-plugin": "^7.0.2",
     "@typescript-eslint/parser": "^7.0.2",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^1.5.3",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
