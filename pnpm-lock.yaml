@@ -12,7 +12,7 @@ importers:
         specifier: ^18.2.56
         version: 18.3.1
       react:
-        specifier: ^18.2.0
+        specifier: ^18.0
         version: 18.3.1
       react-native:
         specifier: '>=0.69'
@@ -4630,7 +4630,7 @@ snapshots:
 
   '@babel/helper-builder-binary-assignment-operator-visitor@7.22.15':
     dependencies:
-      '@babel/types': 7.24.0
+      '@babel/types': 7.24.5
 
   '@babel/helper-compilation-targets@7.23.6':
     dependencies:
@@ -5124,7 +5124,7 @@ snapshots:
       '@babel/helper-hoist-variables': 7.22.5
       '@babel/helper-module-transforms': 7.23.3(@babel/core@7.24.4)
       '@babel/helper-plugin-utils': 7.24.5
-      '@babel/helper-validator-identifier': 7.22.20
+      '@babel/helper-validator-identifier': 7.24.5
 
   '@babel/plugin-transform-modules-umd@7.24.1(@babel/core@7.24.4)':
     dependencies:
@@ -5408,7 +5408,7 @@ snapshots:
     dependencies:
       '@babel/core': 7.24.4
       '@babel/helper-plugin-utils': 7.24.5
-      '@babel/types': 7.24.0
+      '@babel/types': 7.24.5
       esutils: 2.0.3
 
   '@babel/preset-typescript@7.24.1(@babel/core@7.24.4)':
