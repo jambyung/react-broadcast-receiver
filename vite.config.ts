@@ -22,8 +22,8 @@ export default defineConfig({
     emptyOutDir: true,
     lib: {
       entry: resolve(__dirname, 'lib/main.ts'),
-      fileName: 'index',
-      formats: ['es', 'cjs'],
+      name: 'react-broadcast-receiver',
+      fileName: (format) => `index.${format}.js`,
     },
     rollupOptions: {
       // exclude react and react-dom from the bundle
