@@ -1,4 +1,5 @@
 export {
-  ReactBroadcastContextProvider,
-  ReactBroadcastContext,
+  ReactBroadcastContextProvider as BroadcastProvider,
+  useBroadcast,
+  useRegisterReceiver,
 } from './context/ReactBroadcastProvider';
