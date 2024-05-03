@@ -1,6 +1,7 @@
 {
   "name": "react-broadcast-receiver",
-  "version": "0.2.2",
+  "version": "0.2.3",
+  "private": false,
   "type": "module",
   "keywords": [
     "react",
@@ -12,10 +13,20 @@
   "homepage": "https://github.com/jambyung/react-broadcast-receiver",
   "repository": "github:jambyung/react-broadcast-receiver",
   "bugs": "https://github.com/jambyung/react-broadcast-receiver/issues",
-  "main": "dist/react-broadcast-receiver.js",
+  "main": "dist/index.umd.js",
+  "module": "dist/index.es.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "import": "./dist/index.es.js",
+      "require": "./dist/index.umd.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
     "demo": "vite --config vite-demo.config.ts",
+    "clean": "rimraf dist coverage",
     "test:lib": "vitest --dir ./lib",
     "test:demo": "vitest --config vite-demo.config.ts --dir ./demo",
     "coverage:lib": "vitest run --coverage",
@@ -33,7 +44,7 @@
   },
   "peerDependencies": {
     "@types/react": "^18.2.56",
-    "react": "^18.2.0",
+    "react": "^18.0",
     "react-native": ">=0.69"
   },
   "peerDependenciesMeta": {
@@ -68,6 +79,7 @@
     "lint-staged": "^15.2.2",
     "prettier": "^3.2.5",
     "react-dom": "^18.2.0",
+    "rimraf": "^5.0.5",
     "stylelint": "^16.4.0",
     "stylelint-config-prettier-scss": "^1.0.0",
     "stylelint-config-standard-scss": "^13.1.0",

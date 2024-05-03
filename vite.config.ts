@@ -18,9 +18,16 @@ export default defineConfig({
     copyPublicDir: false,
     target: 'esnext',
     minify: false,
+    sourcemap: true,
+    emptyOutDir: true,
     lib: {
       entry: resolve(__dirname, 'lib/main.ts'),
-      formats: ['es'],
+      fileName: 'index',
+      formats: ['es', 'cjs'],
+    },
+    rollupOptions: {
+      // exclude react and react-dom from the bundle
+      external: ['react', 'react-dom'],
     },
   },
   test: {
