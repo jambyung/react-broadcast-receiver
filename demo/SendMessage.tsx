@@ -1,14 +1,15 @@
-import { useCallback, useContext, useState } from 'react';
-import { ReactBroadcastContext } from '../lib/main';
+import { useCallback, useState } from 'react';
+import { useBroadcast } from '../lib/main';
 
 function SendMessage() {
   const [text, setText] = useState('');
   const [action, setAction] = useState('');
-  const { sendBroadcast } = useContext(ReactBroadcastContext);
+
+  const { sendBroadcast } = useBroadcast();
 
   const sendMessage = useCallback(() => {
     sendBroadcast({
-      action: action,
+      action: new RegExp(`^${action}`),
       payload: text,
     });
   }, [sendBroadcast, action, text]);

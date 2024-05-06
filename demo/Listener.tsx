@@ -45,7 +45,8 @@ function Listener({ action }: { action: string; num: number }) {
         padding: '5px',
         borderColor: triggered ? 'blue' : 'black',
         borderRadius: '15px',
-        border: '2px solid black',
+        borderWidth: 2,
+        borderStyle: 'solid',
         boxShadow: '1px 1px 15px 5px rgba(0, 0, 0, 0.15)',
       }}
     >

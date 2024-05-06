@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useReducer,
   useRef,
 } from 'react';
 import { uuidv4 } from '../utils/uuid';
@@ -16,7 +15,7 @@ const DEBUG = false;
  * Intent is what you send to reach listeners
  */
 export interface Intent {
-  action: string;
+  action: string | RegExp;
   payload?: unknown;
 }
 
@@ -76,6 +75,11 @@ export type BroadcastOptions = {
 };
 
 /**
+ * Returns intent history
+ */
+export type GetIntentHistory = () => Intent[];
+
+/**
  * Send out intent
  *
  * @param {Intent} intent to send
@@ -103,16 +107,14 @@ export type SendStickyBroadcast = (
 
 /**
  * filter that is passed to removeStickyBroadcast()
+ *
+ * NOTE: action is not passed since multiple sticky intent can have same action
  */
 export type RemoveStickyBroadcastFilter = {
   /**
-   * uuid of the intent in the map
+   * key of the stickyIntentMap
    */
   id: string;
-  /**
-   * TODO: action filter of the action
-   */
-  // action: ActionFilter,
 };
 
 /**
@@ -156,7 +158,7 @@ type UnregisterReceiverFilter = {
 /**
  * Unregister broadcast receiver
  *
- * @param {RemoveBroadcastReceiverActionConfig} config
+ * @param {Partial<UnregisterReceiverFilter>} config
  */
 type UnregisterReceiver = (filter: Partial<UnregisterReceiverFilter>) => void;
 
@@ -170,6 +172,7 @@ export interface FilterReceiverRecord {
 }
 
 interface ReactBroadcastContextValue {
+  getIntentHistory: GetIntentHistory;
   registerReceiver: RegisterReceiver;
   unregisterReceiver: UnregisterReceiver;
   sendBroadcast: SendBroadcast;
@@ -182,6 +185,7 @@ const notImplemented = () => {
 };
 
 export const ReactBroadcastContext = createContext<ReactBroadcastContextValue>({
+  getIntentHistory: notImplemented,
   registerReceiver: notImplemented,
   unregisterReceiver: notImplemented,
   sendBroadcast: notImplemented,
@@ -211,6 +215,10 @@ export const useRegisterReceiver = (
       }
       uuid.current = registerReceiver(receiver, intentFilter);
     }
+
+    return () => {
+      unregisterReceiver({ id: uuid.current });
+    };
   }, [
     receiver,
     prevReceiver,
@@ -253,122 +261,153 @@ export const useBroadcast = () => {
   };
 };
 
-/**
- * Initial reducer state
- */
-const INITIAL_REDUCER_STATE = {
-  filterReceiverRecordMap: new Map<string, FilterReceiverRecord[]>(),
-  stickyIntentMap: new Map<string, Intent>(),
-  maxHistoryCount: 10,
-  intentHistory: [],
-};
-
 interface ProviderProps {
   children: React.ReactNode;
 }
 
 export function ReactBroadcastContextProvider({ children }: ProviderProps) {
-  const [state, dispatch] = useReducer(broadcastReducer, INITIAL_REDUCER_STATE);
+  const filterReceiverRecordMap = useRef(
+    new Map<string, FilterReceiverRecord[]>(),
+  );
+  const stickyIntentMap = useRef(new Map<string, Intent>());
+  const maxHistoryCount = useRef(10);
+  // Intent History will contain intents that have been sent, or registered as sticky intent.
+  const intentHistory = useRef(new Array<Intent>());
 
-  const registerReceiver = useCallback(
-    function (receiver: BroadcastReceiver, it: IntentFilter) {
-      const id: string = uuidv4();
+  const registerReceiver = useCallback(function (
+    receiver: BroadcastReceiver,
+    filter: IntentFilter,
+  ) {
+    const id: string = uuidv4();
 
-      dispatch({
-        type: IntentActionKind.REGISTER_BROADCAST_RECEIVER,
-        payload: {
-          id,
-          filter: it,
-          receiver,
-        },
-      });
+    const recordList = filterReceiverRecordMap.current.get(filter.action) || [];
 
-      if (DEBUG) {
-        console.log(`registerBroadcastReceiver: ${id}`);
+    const newRecord = { id, filter, receiver };
+
+    filterReceiverRecordMap.current = filterReceiverRecordMap.current.set(
+      filter.action,
+      [...recordList, newRecord],
+    );
+
+    if (DEBUG) {
+      console.log(`registerBroadcastReceiver: ${id}`);
+    }
+
+    return id;
+  }, []);
+
+  const unregisterReceiver: UnregisterReceiver = useCallback(function (
+    config: Partial<UnregisterReceiverFilter>,
+  ) {
+    for (const key in filterReceiverRecordMap) {
+      // key is action, and config has action
+      if (config?.action === key) {
+        filterReceiverRecordMap.current.delete(key);
+        return;
       }
 
-      return id;
-    },
-    [dispatch],
-  );
-
-  const unregisterReceiver = useCallback(
-    function (config: RemoveBroadcastReceiverActionConfig) {
-      dispatch({
-        type: IntentActionKind.REMOVE_BROADCAST_RECEIVER,
-        payload: config,
-      });
-    },
-    [dispatch],
-  );
-
-  const removeStickyBroadcast = useCallback(
-    function (filter: RemoveStickyBroadcastFilter) {
-      dispatch({
-        type: IntentActionKind.REMOVE_BROADCAST_RECEIVER,
-        payload: filter,
-      });
-
-      if (filter.id) {
-        if (state.stickyIntentMap.get(filter.id)) return false;
+      if (config.id) {
+        const records = filterReceiverRecordMap.current.get(key) || [];
+        for (const record of records) {
+          if (config.id === record.id) {
+            filterReceiverRecordMap.current =
+              filterReceiverRecordMap.current.set(record.filter.action, [
+                ...records.filter((item) => item.id === config.id),
+              ]);
+          }
+        }
       }
+    }
+  }, []);
 
-      return true;
-    },
-    [dispatch, state.stickyIntentMap],
-  );
+  const removeStickyBroadcast = useCallback(function (
+    filter: RemoveStickyBroadcastFilter,
+  ) {
+    if (filter.id) {
+      return stickyIntentMap.current.delete(filter.id);
+    }
+
+    return false;
+  }, []);
 
   let sendStickyBroadcast: SendStickyBroadcast | null = null;
 
+  const addIntentHistory = useCallback((intent: Intent) => {
+    const arr = intentHistory.current;
+
+    if (arr.length >= maxHistoryCount.current) {
+      for (let i = 0; i < arr.length - maxHistoryCount.current + 1; i++) {
+        arr.shift();
+      }
+    }
+
+    arr.push(intent);
+  }, []);
+
+  const getIntentHistory = useCallback(() => intentHistory.current, []);
+
   const sendBroadcast = useCallback(
     function (intent: Intent) {
-      const records = state.filterReceiverRecordMap.get(intent.action);
-      if (records) {
-        for (const record of records) {
-          record.receiver(intent, api, {
-            id: record.id,
-            filter: record.filter,
-          });
+      const functions: FilterReceiverRecord[] = [];
+      if (intent.action instanceof RegExp) {
+        for (const key of filterReceiverRecordMap.current.keys()) {
+          if (intent.action.test(key)) {
+            const records = filterReceiverRecordMap.current.get(key);
+            if (records) {
+              functions.push(...records);
+            }
+          }
+        }
+      } else {
+        // just string
+        const records = filterReceiverRecordMap.current.get(intent.action);
+        if (records) {
+          functions.push(...records);
         }
       }
 
+      for (const record of functions) {
+        record.receiver(intent, api, {
+          id: record.id,
+          filter: record.filter,
+        });
+      }
+
+      addIntentHistory(intent);
+
       return {
-        count: records?.length || 0,
+        count: functions?.length || 0,
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      state.filterReceiverRecordMap,
+      filterReceiverRecordMap,
       sendStickyBroadcast,
       removeStickyBroadcast,
       registerReceiver,
       unregisterReceiver,
+      addIntentHistory,
     ],
   );
 
   sendStickyBroadcast = useCallback(
     (intent: Intent) => {
-      const result = api.sendBroadcast!(intent);
+      const result = sendBroadcast(intent);
 
       const id = uuidv4();
 
-      // add intent to the reducer state
-      dispatch({
-        type: IntentActionKind.ADD_STICKY_INTENT,
-        payload: {
-          id,
-          intent,
-        },
-      });
+      stickyIntentMap.current = stickyIntentMap.current.set(id, intent);
+
+      addIntentHistory(intent);
 
       return result;
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sendBroadcast, dispatch],
+    [addIntentHistory, sendBroadcast],
   );
 
   const api: ReactBroadcastContextValue = useMemo(
     () => ({
+      getIntentHistory,
       registerReceiver,
       unregisterReceiver,
       sendBroadcast,
@@ -376,6 +415,7 @@ export function ReactBroadcastContextProvider({ children }: ProviderProps) {
       removeStickyBroadcast,
     }),
     [
+      getIntentHistory,
       registerReceiver,
       unregisterReceiver,
       sendBroadcast,
@@ -389,172 +429,4 @@ export function ReactBroadcastContextProvider({ children }: ProviderProps) {
       {children}
     </ReactBroadcastContext.Provider>
   );
-}
-
-enum IntentActionKind {
-  ADD_STICKY_INTENT = 'ADD_STICKY_INTENT',
-  REMOVE_STICKY_INTENT = 'REMOVE_STICKY_INTENT',
-  SEND_BROADCAST = 'SEND_BROADCAST',
-  REGISTER_BROADCAST_RECEIVER = 'REGISTER_BROADCAST_RECEIVER',
-  REMOVE_BROADCAST_RECEIVER = 'REMOVE_BROADCAST_RECEIVER',
-}
-
-interface AddStickyIntentAction {
-  type: IntentActionKind.ADD_STICKY_INTENT;
-  payload: {
-    id: string;
-    intent: Intent;
-  };
-}
-
-interface RemoveStickyIntentAction {
-  type: IntentActionKind.REMOVE_STICKY_INTENT;
-  payload: RemoveStickyBroadcastFilter;
-}
-
-interface SendBroadcastAction {
-  type: IntentActionKind.SEND_BROADCAST;
-  payload: Intent;
-}
-
-interface RegisterBroadcastReceiverAction {
-  type: IntentActionKind.REGISTER_BROADCAST_RECEIVER;
-  payload: FilterReceiverRecord;
-}
-
-export interface RemoveBroadcastReceiverActionConfig {
-  id?: string;
-  action?: string;
-}
-
-interface RemoveBroadcastReceiverAction {
-  type: IntentActionKind.REMOVE_BROADCAST_RECEIVER;
-  payload: RemoveBroadcastReceiverActionConfig;
-}
-
-type BroadcastActions =
-  | AddStickyIntentAction
-  | RemoveStickyIntentAction
-  | SendBroadcastAction
-  | RegisterBroadcastReceiverAction
-  | RemoveBroadcastReceiverAction;
-
-export interface BroadcastState {
-  /**
-   * Map of intent filters and receivers
-   *
-   * @class {Map}
-   * @key {string} action name
-   * @value {FilterReceiverRecord[]}
-   */
-  filterReceiverRecordMap: Map<string, FilterReceiverRecord[]>;
-
-  /**
-   * Map for sticky intents
-   *
-   * @class {Map}
-   * @key {string} uuid
-   * @value {Intent} intent
-   */
-  stickyIntentMap: Map<string, Intent>;
-
-  /**
-   * Max number of intents to keep in the history
-   */
-  maxHistoryCount: number;
-
-  /**
-   * All of the intents that have been sent
-   *
-   * @value {Intent} intents
-   */
-  intentHistory: Intent[];
-}
-
-export function broadcastReducer(
-  state: BroadcastState,
-  action: BroadcastActions,
-) {
-  const { type, payload } = action;
-  const {
-    filterReceiverRecordMap: frrM,
-    stickyIntentMap: siM,
-    maxHistoryCount: mhC,
-    intentHistory: iH,
-  } = state;
-
-  switch (type) {
-    case IntentActionKind.ADD_STICKY_INTENT: {
-      const { id, intent } = payload;
-
-      return {
-        ...state,
-        stickyIntentMap: siM.set(id, intent),
-      };
-    }
-
-    case IntentActionKind.REMOVE_STICKY_INTENT: {
-      const { id } = payload;
-
-      const newMap = new Map<string, Intent>(siM);
-      newMap.delete(id);
-
-      return {
-        ...state,
-        stickyIntentMap: newMap,
-      };
-    }
-
-    case IntentActionKind.SEND_BROADCAST: {
-      const newHistory = iH.length == mhC ? iH.slice(1) : [...iH];
-      newHistory.push(payload);
-
-      return {
-        ...state,
-        intentHistory: newHistory,
-      };
-    }
-
-    case IntentActionKind.REGISTER_BROADCAST_RECEIVER: {
-      const recordList = frrM.get(payload.filter.action) || [];
-
-      const newRecord = payload;
-
-      const newMap = frrM.set(payload.filter.action, [
-        ...recordList,
-        newRecord,
-      ]);
-
-      return {
-        ...state,
-        filterReceiverRecordMap: newMap,
-      };
-    }
-
-    case IntentActionKind.REMOVE_BROADCAST_RECEIVER: {
-      for (const key in frrM) {
-        const records = frrM.get(key) || [];
-        for (const record of records) {
-          if (payload.action && payload.action !== record.filter.action) {
-            continue;
-          }
-
-          if (payload.id && payload.id === record.id) {
-            return {
-              ...state,
-              filterReceiverRecordMap: frrM.set(record.filter.action, [
-                ...records.filter((item) => item.id === payload),
-              ]),
-            };
-          }
-        }
-      }
-
-      return state;
-    }
-
-    default:
-      console.log('Not handled, action = ', action);
-      return state;
-  }
 }

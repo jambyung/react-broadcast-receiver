@@ -4,13 +4,13 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import App from './App';
-import { ReactBroadcastContextProvider } from '../lib/main';
+import { BroadcastProvider } from '../lib/main';
 
 test('demo renders', async () => {
   render(
-    <ReactBroadcastContextProvider>
+    <BroadcastProvider>
       <App />
-    </ReactBroadcastContextProvider>,
+    </BroadcastProvider>,
   );
 
   expect(screen.getByRole('title')).toHaveTextContent(

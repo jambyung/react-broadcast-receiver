@@ -3,3 +3,9 @@ export {
   useBroadcast,
   useRegisterReceiver,
 } from './context/ReactBroadcastProvider';
+
+export type {
+  BroadcastReceiver,
+  Intent,
+  IntentFilter,
+} from './context/ReactBroadcastProvider';
